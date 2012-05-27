@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"sync"
 
 	"code.google.com/p/go.net/websocket"
 )
@@ -29,6 +30,7 @@ type BrowserAction struct {
 
 type WebServer struct {
 	fowardMap           map[uint32]*httputil.ReverseProxy
+	fowardMapMutex      sync.Mutex
 	mux                 *http.ServeMux
 	wsBrowserActionChan chan *BrowserAction
 }
@@ -68,6 +70,8 @@ func (server *WebServer) handleWebSocket(ws *websocket.Conn) {
 }
 
 func (server *WebServer) handleForward(w http.ResponseWriter, req *http.Request) {
+	server.fowardMapMutex.Lock()
+	defer server.fowardMapMutex.Unlock()
 	fmt.Println("r.URL =", req.URL)
 	pattern, _ := regexp.Compile("^/fwd/(\\d+)(/.*)$")
 	var matches []string = pattern.FindStringSubmatch(req.URL.String())
@@ -88,6 +92,8 @@ func (server *WebServer) ListenAndServe() {
 }
 
 func (server *WebServer) RegisterProxy(host string) uint32 {
+	server.fowardMapMutex.Lock()
+	defer server.fowardMapMutex.Unlock()
 	id := rand.Uint32()
 	fmt.Println("register", id, host)
 	target := url.URL{
@@ -99,6 +105,8 @@ func (server *WebServer) RegisterProxy(host string) uint32 {
 }
 
 func (server *WebServer) UnregisterProxy(id uint32) {
+	server.fowardMapMutex.Lock()
+	defer server.fowardMapMutex.Unlock()
 	fmt.Println("Unregister", id)
 	delete(server.fowardMap, id)
 	if server.wsBrowserActionChan != nil {
