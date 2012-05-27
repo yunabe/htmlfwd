@@ -1,0 +1,52 @@
+#!/usr/bin/python
+
+import json
+import os
+import socket
+import time
+import threading
+import urllib
+import urlparse
+from wsgiref.simple_server import make_server
+
+def handler(env, start_response):
+  start_response('200 OK', [('Content-Type', 'text/html')])
+  params = urlparse.parse_qs(env['QUERY_STRING'])
+  return ['Hello %s' % ', '.join(params.get('name', []))]
+
+
+class ServerThread(threading.Thread):
+  def __init__(self, server):
+    threading.Thread.__init__(self)
+    self.server = server
+
+  def run(self):
+    self.server.serve_forever()
+
+
+def main():
+  server = make_server('', 0, handler)
+  port = server.socket.getsockname()[1]
+
+  server_thread = ServerThread(server)
+  server_thread.start()
+
+  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  sock.connect(('localhost', 9999))
+  url = '/hello?%s' % urllib.urlencode({'name': os.getlogin()})
+  req = json.dumps({'host': 'localhost:%d' % port,
+                    'openurl': url})
+  sock.send(req)
+
+  notification_req = json.dumps(
+    {'notification': 'Hello %s with notification.' % os.getlogin()})
+  sock.send(notification_req)
+  try:
+    sock.recv(4096)
+  finally:
+    server.server_close()
+    server_thread.join()
+
+
+if __name__ == '__main__':
+  main()

@@ -1,0 +1,10 @@
+{
+  "name": "HTMLForwarding",
+  "version": "0.0.1",
+  "description": "Web socket test.",
+  "background_page": "background.html",
+  "permissions": [
+    "tabs",
+    "notifications"
+  ]
+}
