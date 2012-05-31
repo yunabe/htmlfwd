@@ -29,15 +29,20 @@ type BrowserAction struct {
 }
 
 type WebServer struct {
-	fowardMap           map[uint32]*httputil.ReverseProxy
-	fowardMapMutex      sync.Mutex
-	mux                 *http.ServeMux
-	wsBrowserActionChan chan *BrowserAction
+	mux            *http.ServeMux
+	fowardMap      map[uint32]*httputil.ReverseProxy
+	fowardMapMutex sync.Mutex
+	baChans        map[chan *BrowserAction]bool
+	baChansMutex   sync.Mutex
 }
 
 func NewWebServer() *WebServer {
 	mux := http.NewServeMux()
-	server := WebServer{fowardMap: make(map[uint32]*httputil.ReverseProxy), mux: mux}
+	server := WebServer{
+		fowardMap: make(map[uint32]*httputil.ReverseProxy),
+		mux:       mux,
+		baChans:   make(map[chan *BrowserAction]bool),
+	}
 	mux.Handle("/ws", websocket.Handler(
 		func(ws *websocket.Conn) {
 			// This looks very redandant :{
@@ -49,23 +54,67 @@ func NewWebServer() *WebServer {
 	return &server
 }
 
+func detectWebSocketClose(ws *websocket.Conn, ch chan bool) {
+	var msg [1024]byte
+	for {
+		n, err := ws.Read(msg[:])
+		if err != nil {
+			fmt.Println("WebSocket read error:", err)
+			break
+		}
+		if n == 0 {
+			break
+		}
+	}
+	close(ch)
+}
+
+func createWebSocketCloseChannel(ws *websocket.Conn) chan bool {
+	ch := make(chan bool)
+	go detectWebSocketClose(ws, ch)
+	return ch
+}
+
 func (server *WebServer) handleWebSocket(ws *websocket.Conn) {
 	// TODO: Handle a case where websocket is closed by peer.
 	defer ws.Close()
 	wsEncoder := json.NewEncoder(ws)
 
-	bachan := make(chan *BrowserAction)
-	if server.wsBrowserActionChan != nil {
-		close(server.wsBrowserActionChan)
-	}
-	server.wsBrowserActionChan = bachan
+	bachan := make(chan *BrowserAction, 100)
+	server.baChansMutex.Lock()
+	server.baChans[bachan] = true
+	server.baChansMutex.Unlock()
 
+	wsCloseChan := createWebSocketCloseChannel(ws)
+
+Loop:
 	for {
-		ba, ok := <-bachan
-		if !ok {
-			break
+		select {
+		case ba, ok := <-bachan:
+			if !ok {
+				panic("bachan is closed unexpectedly.")
+				break Loop
+			}
+			wsEncoder.Encode(ba)
+		case _, ok := <-wsCloseChan:
+			if !ok {
+				fmt.Println("WebSocket is closed by peer.")
+				server.baChansMutex.Lock()
+				close(bachan)
+				for {
+					if _, ok := <-bachan; ok {
+						fmt.Println("BrowserAction is discarded.")
+					} else {
+						break
+					}
+				}
+				delete(server.baChans, bachan)
+				server.baChansMutex.Unlock()
+				break Loop
+			} else {
+				panic("wsCloseChan had data")
+			}
 		}
-		wsEncoder.Encode(ba)
 	}
 }
 
@@ -109,17 +158,25 @@ func (server *WebServer) UnregisterProxy(id uint32) {
 	defer server.fowardMapMutex.Unlock()
 	fmt.Println("Unregister", id)
 	delete(server.fowardMap, id)
-	if server.wsBrowserActionChan != nil {
-		server.wsBrowserActionChan <- &BrowserAction{Id: id, CloseTabs: true}
-	}
+	server.sendBrowserAction(&BrowserAction{Id: id, CloseTabs: true})
 }
 
 func (server *WebServer) sendBrowserAction(action *BrowserAction) {
-	if server.wsBrowserActionChan == nil {
+	server.baChansMutex.Lock()
+	defer server.baChansMutex.Unlock()
+	if len(server.baChans) == 0 {
 		fmt.Println("No websocket connection exists.")
 		return
 	}
-	server.wsBrowserActionChan <- action
+	for baChan, _ := range server.baChans {
+		// Checks cap and len of baChan to avoid deadlock.
+		// TODO: There might be a better way to synchronize and avoid deadlock.
+		if len(baChan) != cap(baChan) {
+			baChan <- action
+		} else {
+			fmt.Println("baChan is full. Skipping...")
+		}
+	}
 }
 
 func handleClientConn(server *WebServer, conn net.Conn) {
