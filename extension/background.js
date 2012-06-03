@@ -115,25 +115,10 @@ function onopen(e) {
     }
     connectionOpened = true;
     retryInterval = retryIntervalMin;
-    var popup = webkitNotifications.createNotification(
-        "",  // no icon. Don't use null.
-        "Notification",
-        "Connected to the werver.");
-    setTimeout(function() { popup.cancel(); }, 5000);
-    popup.show();
 }
 
 function onclose(e) {
-    if (connectionOpened) {
-        if (ws != null) {
-            var popup = webkitNotifications.createNotification(
-                "",  // no icon. Don't use null.
-                "Notification",
-                "The connection was closed by the server.");
-            setTimeout(function() { popup.cancel(); }, 5000);
-            popup.show();
-        }
-    } else {
+    if (!connectionOpened) {
         console.log('Failed to connect to the server.');
     }
     var canceled = ws == null;
