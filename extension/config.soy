@@ -1,0 +1,47 @@
+{namespace yunabe.htmlfwd.soy autoescape="contextual"}
+
+/**
+ * Says hello to the world.
+ * @param label Name of server
+ * @param host Hostname of server
+ * @param status status of server
+ * @param bodyId dom id of body.
+ * @param checkId dom id of checkbox.
+ * @param labelId dom id of label node.
+ */
+{template .serverEntry}
+  <li>
+    <table style="width:100%">
+      <tr>
+        <td>
+          <input id="{$checkId}" type="checkbox"{if $status != 'disconnected'} checked{/if}>
+        <td id="{$bodyId}" class="status {$status}">
+          <span>{$label}</span>&nbsp;
+          <span style="font-size:small">{$host}</span>
+          <div id="{$labelId}">
+            {call .statusLabel data="all"/}
+          </div>
+    </table>
+  </li>
+{/template}
+
+/**
+ * foo
+ * @param status
+ * @param? retry_sec
+ */
+{template .statusLabel}
+  {switch $status}
+  {case 'connected'}
+    <b style="font-size:small;color:#090">Connected</b>
+  {case 'disconnected'}
+    <b style="font-size:small;color:#900">Disconnected</b>
+  {case 'connecting'}
+    {if $retry_sec > 0}
+      <span style="color:gray;font-size:small">Connecting in {$retry_sec}s..&nbsp;
+      <b style="color:#47e;cursor:pointer">Try now</b>
+    {else}
+      <span style="color:gray;font-size:small">Connecting..&nbsp;
+    {/if}
+  {/switch}
+{/template}

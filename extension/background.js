@@ -1,6 +1,32 @@
 var ws = null;
 
-var addr = 'localhost:8888';
+var Server = function(label, host) {
+    this.label = label;
+    this.host = host;
+    this.status = 'connecting';
+    this.nextRetryTime = 0;
+};
+
+Server.prototype.getMessage = function() {
+    var msg = this.getStatusMessage();
+    msg['label'] = this.label;
+    msg['host'] = this.host;
+    return msg;
+};
+
+Server.prototype.getStatusMessage = function() {
+    var msg = {};
+    msg['status'] = this.status;
+    var now = Date.now();
+    if (this.nextRetryTime > now) {
+        msg['retry_sec'] = Math.floor((this.nextRetryTime - now) / 1000);
+    }
+    return msg;
+};
+
+var servers = [
+    new Server('Ubuntu', 'localhost:8888', 'connecting')
+];
 
 function sendMessage() {
     var input = document.getElementById('input').value;
@@ -17,7 +43,7 @@ var retryInterval = retryIntervalMin;
 
 function connectToServer() {
     console.log('connectToServer');
-    var url = 'ws://' + addr + '/ws';
+    var url = 'ws://' + servers[0].host + '/ws';
     ws = new WebSocket(url);
     ws.onmessage = onmessage;
     ws.onopen = onopen;
@@ -25,8 +51,26 @@ function connectToServer() {
     ws.onerror = onerror;
 }
 
+var configPorts = [];
+
+function onConnectConfig(port) {
+    configPorts.push(port);
+    port.postMessage({'reload': [servers[0].getMessage()]});
+    port.onDisconnect.addListener(onDisconnectConfig);
+}
+
+function onDisconnectConfig(port) {
+    for (var i = 0; i < configPorts.length; ++i) {
+        if (port == configPorts[i]) {
+            configPorts.splice(i, 1);
+            break;
+        }
+    }
+}
+
 function init() {
     connectToServer();
+    chrome.extension.onConnect.addListener(onConnectConfig);
 }
 
 function addMessage(message) {
@@ -41,6 +85,10 @@ function onerror(e) {
 var connectionOpened = false;
 
 function onopen(e) {
+    servers[0].status = 'connected';
+    for (var i = 0; i < configPorts.length; ++i) {
+        configPorts[i].postMessage({'update': [{'status': 'connected'}]});
+    }
     connectionOpened = true;
     retryInterval = retryIntervalMin;
     var popup = webkitNotifications.createNotification(
@@ -64,6 +112,11 @@ function onclose(e) {
     }
     connectionOpened = false;
     setTimeout(connectToServer, retryInterval);
+    servers[0].status = 'connecting';
+    servers[0].nextRetryTime = Date.now() + retryInterval;
+    for (var i = 0; i < configPorts.length; ++i) {
+        configPorts[i].postMessage({'update': [servers[0].getStatusMessage()]});
+    }
     retryInterval = retryInterval * 2;
     if (retryInterval > retryIntervalMax) {
         retryInterval = retryIntervalMax;
@@ -78,7 +131,7 @@ function onmessage(e) {
     var path = obj['OpenUrl']
     addMessage('url: ' + path)
     if (path) {
-        var url = 'http://' + addr + '/fwd/' + id + path;
+        var url = 'http://' + servers[0].host + '/fwd/' + id + path;
         addMessage(url)
         addMessage(chrome)
         addMessage(chrome.tabs)

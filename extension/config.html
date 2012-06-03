@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script type="text/javascript" src="config.js"></script>
+    <style type="text/css">
+      ul.sl li {
+        margin-bottom:5px;
+      }
+      ul.sl li:hover {
+        background-color:#eee;
+        margin-bottom:5px;
+      }
+      td.status.connected {
+        cursor: pointer;
+      }
+      #main {
+        -webkit-transition: -webkit-transform;
+        -webkit-transition-duration: 0.7s;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="main" style="width:300px;height:400px;border: solid 1px">
+      <h3>Servers</h3>
+      <ul id="server-list" class="sl" style="list-style:none"></ul>
+    </div>
+  </body>
+</html>
