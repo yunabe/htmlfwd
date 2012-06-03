@@ -37,8 +37,8 @@ function sendMessage() {
     ws.send(input);
 }
 
-var retryIntervalMin = 1000;  // ms
-var retryIntervalMax = 60 * 1000;
+var retryIntervalMin = 10 * 1000;  // ms
+var retryIntervalMax = 10 * 60 * 1000;
 var retryInterval = retryIntervalMin;
 
 function connectToServer() {
@@ -59,6 +59,13 @@ function connectToServer() {
 
 function disconnectFromServer() {
     if (!ws) {
+        clearTimeout(retryTimerId);
+        retryInterval = retryIntervalMin;
+        servers[0].status = 'disconnected';
+        for (var i = 0; i < configPorts.length; ++i) {
+            configPorts[i].postMessage(
+                {'update': [servers[0].getStatusMessage()]});
+        }
         return;
     }
     ws.close();
