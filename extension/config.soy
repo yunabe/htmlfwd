@@ -29,6 +29,7 @@
  * foo
  * @param status
  * @param? retry_sec
+ * @param? retryButtonId
  */
 {template .statusLabel}
   {switch $status}
@@ -39,7 +40,7 @@
   {case 'connecting'}
     {if $retry_sec > 0}
       <span style="color:gray;font-size:small">Connecting in {$retry_sec}s..&nbsp;
-      <b style="color:#47e;cursor:pointer">Try now</b>
+      <b id="{$retryButtonId}" style="color:#47e;cursor:pointer">Try now</b>
     {else}
       <span style="color:gray;font-size:small">Connecting..&nbsp;
     {/if}

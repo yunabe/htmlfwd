@@ -42,6 +42,12 @@ var retryIntervalMax = 60 * 1000;
 var retryInterval = retryIntervalMin;
 
 function connectToServer() {
+    // clear existing timer to avoid we create multi-timers.
+    clearTimeout(retryTimerId);
+    retryTimerId = null;
+    if (ws) {
+        return;
+    }
     console.log('connectToServer');
     var url = 'ws://' + servers[0].host + '/ws';
     ws = new WebSocket(url);
@@ -51,12 +57,21 @@ function connectToServer() {
     ws.onerror = onerror;
 }
 
+function disconnectFromServer() {
+    if (!ws) {
+        return;
+    }
+    ws.close();
+    ws = null;
+}
+
 var configPorts = [];
 
 function onConnectConfig(port) {
     configPorts.push(port);
     port.postMessage({'reload': [servers[0].getMessage()]});
     port.onDisconnect.addListener(onDisconnectConfig);
+    port.onMessage.addListener(onMessageFromConfig);
 }
 
 function onDisconnectConfig(port) {
@@ -65,6 +80,14 @@ function onDisconnectConfig(port) {
             configPorts.splice(i, 1);
             break;
         }
+    }
+}
+
+function onMessageFromConfig(msg, port) {
+    if (msg['connect']) {
+        connectToServer();
+    } else if (msg['disconnect']) {
+        disconnectFromServer();
     }
 }
 
@@ -83,6 +106,7 @@ function onerror(e) {
 }
 
 var connectionOpened = false;
+var retryTimerId = null;
 
 function onopen(e) {
     servers[0].status = 'connected';
@@ -101,17 +125,31 @@ function onopen(e) {
 
 function onclose(e) {
     if (connectionOpened) {
-        var popup = webkitNotifications.createNotification(
-            "",  // no icon. Don't use null.
-            "Notification",
-            "The connection was closed by the server.");
-        setTimeout(function() { popup.cancel(); }, 5000);
-        popup.show();
+        if (ws != null) {
+            var popup = webkitNotifications.createNotification(
+                "",  // no icon. Don't use null.
+                "Notification",
+                "The connection was closed by the server.");
+            setTimeout(function() { popup.cancel(); }, 5000);
+            popup.show();
+        }
     } else {
         console.log('Failed to connect to the server.');
     }
+    var canceled = ws == null;
     connectionOpened = false;
-    setTimeout(connectToServer, retryInterval);
+    ws = null;
+    if (canceled) {
+        // if connection is canceled.
+        servers[0].status = 'disconnected';
+        for (var i = 0; i < configPorts.length; ++i) {
+            configPorts[i].postMessage(
+                {'update': [servers[0].getStatusMessage()]});
+        }
+        return;
+    }
+
+    retryTimerId = setTimeout(connectToServer, retryInterval);
     servers[0].status = 'connecting';
     servers[0].nextRetryTime = Date.now() + retryInterval;
     for (var i = 0; i < configPorts.length; ++i) {

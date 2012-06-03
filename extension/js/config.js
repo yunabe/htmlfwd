@@ -17,15 +17,17 @@ yunabe.htmlfwd.config.ServerEntry = function(label, host, status, opt_retry_sec)
     this.bodyId = 'body' + goog.getUid(this);
     this.checkId = 'check' + goog.getUid(this);
     this.labelId = 'label' + goog.getUid(this);
+    this.retryButtonId = 'retry' + goog.getUid(this);
     this.retry_sec = opt_retry_sec || 0;
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.render = function() {
-    setTimeout(goog.bind(this.registerCheckboxCallback, this), 0);
+    setTimeout(goog.bind(this.registerCallbacks, this), 0);
     return yunabe.htmlfwd.soy.serverEntry(
         {label: this.label, host: this.host,
          status: this.status, retry_sec: this.retry_sec,
-         bodyId: this.bodyId, checkId: this.checkId, labelId: this.labelId});
+         bodyId: this.bodyId, checkId: this.checkId,
+         labelId: this.labelId, retryButtonId: this.retryButtonId});
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.updateStatus = function(status, opt_retry_sec) {
@@ -34,17 +36,17 @@ yunabe.htmlfwd.config.ServerEntry.prototype.updateStatus = function(status, opt_
     document.getElementById(this.bodyId).className = 'status ' + this.status;
     document.getElementById(this.labelId).innerHTML =
         yunabe.htmlfwd.soy.statusLabel({status: this.status,
-                                        retry_sec: this.retry_sec});
+                                        retry_sec: this.retry_sec,
+                                        retryButtonId: this.retryButtonId});
+    document.getElementById(this.retryButtonId).addEventListener(
+        'click', goog.bind(this.onRetryClicked, this));
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.decrementRetrySec = function() {
     if (this.status != 'connecting' || this.retry_sec <= 0) {
         return false;
     }
-    this.retry_sec -= 1;
-    document.getElementById(this.labelId).innerHTML =
-        yunabe.htmlfwd.soy.statusLabel({status: this.status,
-                                        retry_sec: this.retry_sec});
+    this.updateStatus(this.status, this.retry_sec - 1);
     if (this.retry_sec <= 0) {
         return false;
     } else {
@@ -53,16 +55,18 @@ yunabe.htmlfwd.config.ServerEntry.prototype.decrementRetrySec = function() {
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.connectToServer = function() {
-    // TODO
+    bgPort['postMessage']({'connect': true});
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.disconnectFromServer = function() {
-    // TODO
+    bgPort['postMessage']({'disconnect': true});
 };
 
-yunabe.htmlfwd.config.ServerEntry.prototype.registerCheckboxCallback = function() {
-    goog.events.listen(document.getElementById(this.checkId), 'click',
-                       goog.bind(this.onCheckboxClicked, this));
+yunabe.htmlfwd.config.ServerEntry.prototype.registerCallbacks = function() {
+    document.getElementById(this.checkId).addEventListener(
+        'click', goog.bind(this.onCheckboxClicked, this));
+    document.getElementById(this.retryButtonId).addEventListener(
+        'click', goog.bind(this.onRetryClicked, this));
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.onCheckboxClicked = function() {
@@ -72,6 +76,10 @@ yunabe.htmlfwd.config.ServerEntry.prototype.onCheckboxClicked = function() {
     } else {
         this.disconnectFromServer();
     }
+};
+
+yunabe.htmlfwd.config.ServerEntry.prototype.onRetryClicked = function() {
+    this.connectToServer();
 };
 
 var serverEntries = [];
@@ -129,6 +137,8 @@ var onMessageFromBackground = function(msg, port) {
     }
 };
 
+var bgPort = null;
+
 var main = function() {
     var mainBody = document.getElementById('main');
     setTimeout(function() {
@@ -138,8 +148,8 @@ var main = function() {
         mainBody.style['-webkit-transform'] = 'translate(0px)';
     }, 2000);
 
-    var port = chrome.extension.connect();
-    port['onMessage']['addListener'](onMessageFromBackground);
+    bgPort = chrome.extension.connect();
+    bgPort['onMessage']['addListener'](onMessageFromBackground);
 };
 
 goog.events.listen(window, 'load', main);
