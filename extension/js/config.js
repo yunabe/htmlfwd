@@ -38,8 +38,11 @@ yunabe.htmlfwd.config.ServerEntry.prototype.updateStatus = function(status, opt_
         yunabe.htmlfwd.soy.statusLabel({status: this.status,
                                         retry_sec: this.retry_sec,
                                         retryButtonId: this.retryButtonId});
-    document.getElementById(this.retryButtonId).addEventListener(
-        'click', goog.bind(this.onRetryClicked, this));
+    var retryButton = document.getElementById(this.retryButtonId);
+    if (retryButton) {
+            retryButton.addEventListener(
+                'click', goog.bind(this.onRetryClicked, this));
+    }
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.decrementRetrySec = function() {
@@ -65,8 +68,11 @@ yunabe.htmlfwd.config.ServerEntry.prototype.disconnectFromServer = function() {
 yunabe.htmlfwd.config.ServerEntry.prototype.registerCallbacks = function() {
     document.getElementById(this.checkId).addEventListener(
         'click', goog.bind(this.onCheckboxClicked, this));
-    document.getElementById(this.retryButtonId).addEventListener(
-        'click', goog.bind(this.onRetryClicked, this));
+    var retryButton = document.getElementById(this.retryButtonId);
+    if (retryButton) {
+            retryButton.addEventListener(
+                'click', goog.bind(this.onRetryClicked, this));
+    }
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.onCheckboxClicked = function() {
@@ -137,19 +143,50 @@ var onMessageFromBackground = function(msg, port) {
     }
 };
 
+var onClickSettingLink = function() {
+    var mainBody = document.getElementById('main');
+    mainBody.style['-webkit-transform'] = 'translate(-300px)';
+    var servers = [];
+    for (var i = 0; i < serverEntries.length; ++i) {
+        servers.push({label: serverEntries[i].label,
+                      host: serverEntries[i].host});
+    }
+    for (var i = 0; i < 2; ++i) {
+        servers.push({label: '', host: ''});
+    }
+    var subDiv = document.getElementById('sub');
+    subDiv.innerHTML = yunabe.htmlfwd.soy.settingPanel({servers: servers});
+    document.getElementById('setting-save-button').addEventListener(
+        'click', function() {
+            var labels = document.getElementsByClassName('label-text');
+            var hosts = document.getElementsByClassName('host-text');
+            var settings = [];
+            for (var i = 0; i < labels.length || i < hosts.length; ++i) {
+                var label = labels.length > i ? labels[i].value : '';
+                var host = hosts.length > i ? hosts[i].value : '';
+                if (label || host) {
+                    settings.push({'label': label, 'host': host});
+                }
+            }
+            bgPort.postMessage({'reload': settings});
+            mainBody.style['-webkit-transform'] = 'translate(0px)';
+        });
+    document.getElementById('setting-cancel-button').addEventListener(
+        'click', function() {
+            mainBody.style['-webkit-transform'] = 'translate(0px)';
+        });
+};
+
 var bgPort = null;
 
 var main = function() {
     var mainBody = document.getElementById('main');
-    setTimeout(function() {
-        mainBody.style['-webkit-transform'] = 'translate(-300px)';
-    }, 1000);
-    setTimeout(function() {
-        mainBody.style['-webkit-transform'] = 'translate(0px)';
-    }, 2000);
 
     bgPort = chrome.extension.connect();
     bgPort['onMessage']['addListener'](onMessageFromBackground);
+
+    var settingLink = document.getElementById('setting-link');
+    settingLink.addEventListener('click', onClickSettingLink);
 };
 
 goog.events.listen(window, 'load', main);

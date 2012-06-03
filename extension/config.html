@@ -17,12 +17,31 @@
         -webkit-transition: -webkit-transform;
         -webkit-transition-duration: 0.7s;
       }
+      .setting-list {
+        margin-top: 10px;
+        display: table;
+      }
+      .setting-list > div {
+        display: table-row;
+      }
+      .setting-list > div > span {
+        display: table-cell;
+      }
     </style>
   </head>
   <body>
-    <div id="main" style="width:300px;height:400px;border: solid 1px">
-      <h3>Servers</h3>
-      <ul id="server-list" class="sl" style="list-style:none"></ul>
+    <div style="width:250px">
+      <div id="main" style="width:600px;display:table">
+        <div
+           style="width:300px;height:400px;display:table-cell">
+          <div>
+            <b style="font-size:large">Servers</b> -
+            <span id="setting-link" style="color:#47e;cursor:pointer">Setting</span>
+          </div>
+          <ul id="server-list" class="sl" style="padding-left:0px;list-style:none"></ul>
+        </div>
+        <div id="sub" style="width:300px;display:table-cell"></div>
+      </div>
     </div>
   </body>
 </html>

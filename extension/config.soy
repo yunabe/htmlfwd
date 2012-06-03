@@ -46,3 +46,31 @@
     {/if}
   {/switch}
 {/template}
+
+/**
+ * Server setting
+ * @param servers Servers
+ */
+{template .settingPanel}
+  <div>
+    <b style="font-size:large">Edit servers</b>
+    <div class="setting-list">
+      <div>
+        <span>Name</span>
+        <span>Host</span>
+      </div>
+      {foreach $server in $servers}
+        <div>
+          <span><input type="text" class="label-text"
+                       value="{$server.label}"></span>
+          <span><input type="text" class="host-text"
+                       value="{$server.host}"></span>
+        </div>
+      {/foreach}
+    </div>
+    <div>
+      <input id="setting-save-button" type="button" value="Save">
+      <input id="setting-cancel-button" type="button" value="Cancel">
+    </div>
+  </div>
+{/template}

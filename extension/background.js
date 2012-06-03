@@ -24,9 +24,7 @@ Server.prototype.getStatusMessage = function() {
     return msg;
 };
 
-var servers = [
-    new Server('Ubuntu', 'localhost:8888', 'connecting')
-];
+var servers = [];
 
 function sendMessage() {
     var input = document.getElementById('input').value;
@@ -95,10 +93,40 @@ function onMessageFromConfig(msg, port) {
         connectToServer();
     } else if (msg['disconnect']) {
         disconnectFromServer();
+    } else if (msg['reload']) {
+        var settings = msg['reload'];
+        console.log(settings);
+        localStorage['server-settings'] = JSON.stringify(settings);
+        disconnectFromServer();
+        setUpServers(settings);
+        connectToServer();
+    }
+}
+
+function setUpServers(settings) {
+    servers = [];
+    if (settings.length == 0) {
+        // We need at least one server.
+        // TODO: Remove this hack.
+        settings.push({'label': 'MyServer', 'host': 'localhost:8888'});
+    }
+    for (var i = 0; i < settings.length; ++i) {
+        servers.push(new Server(
+            settings[i]['label'], settings[i]['host'], 'connecting'));
+    }
+    for (var i = 0; i < configPorts.length; ++i) {
+        configPorts[i].postMessage({'reload': [servers[0].getMessage()]});
     }
 }
 
 function init() {
+    var settings;
+    try {
+        settings = JSON.parse(localStorage['server-settings']);
+    } catch (e) {
+        settings = [];
+    }
+    setUpServers(settings);
     connectToServer();
     chrome.extension.onConnect.addListener(onConnectConfig);
 }
