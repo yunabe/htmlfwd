@@ -87,6 +87,7 @@ yunabe.htmlfwd.config.ServerEntry.prototype.onCheckboxClicked = function() {
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.onRetryClicked = function() {
+    // TODO: Update labels imediately. Otherwise, users feel click is ignored.
     this.connectToServer();
 };
 
