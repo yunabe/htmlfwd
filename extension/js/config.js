@@ -10,7 +10,9 @@ goog.require('goog.events');
 /**
  * @constructor
  */
-yunabe.htmlfwd.config.ServerEntry = function(label, host, status, opt_retry_sec) {
+yunabe.htmlfwd.config.ServerEntry =
+    function(index, label, host, status, opt_retry_sec) {
+    this.index = index;
     this.label = label;
     this.host = host;
     this.status = status;
@@ -58,11 +60,11 @@ yunabe.htmlfwd.config.ServerEntry.prototype.decrementRetrySec = function() {
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.connectToServer = function() {
-    bgPort['postMessage']({'connect': true});
+    bgPort['postMessage']({'connect': true, 'index': this.index});
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.disconnectFromServer = function() {
-    bgPort['postMessage']({'disconnect': true});
+    bgPort['postMessage']({'disconnect': true, 'index': this.index});
 };
 
 yunabe.htmlfwd.config.ServerEntry.prototype.registerCallbacks = function() {
@@ -116,11 +118,11 @@ var onMessageFromBackground = function(msg, port) {
         serverEntries = [];
         var servers = msg['reload'];
         var htmls = [];
-        for (var i = 0; i < servers.length; ++i) {
-            var setting = servers[i];
+        for (var idx = 0; idx < servers.length; ++idx) {
+            var setting = servers[idx];
             var server = new yunabe.htmlfwd.config.ServerEntry(
-                setting['label'], setting['host'], setting['status'],
-                setting['retry_sec'] || 0);
+                idx, setting['label'], setting['host'],
+                setting['status'], setting['retry_sec'] || 0);
             serverEntries.push(server);
             htmls.push(server.render());
         }

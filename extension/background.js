@@ -58,11 +58,20 @@ Server.prototype.connectToServer = function() {
     }
     addMessage('connectToServer');
     var url = 'ws://' + this.host + '/ws';
-    this.webSocket = new WebSocket(url);
-    this.webSocket.onmessage = this.onMessage.bind(this);
-    this.webSocket.onopen = this.onOpen.bind(this);
-    this.webSocket.onclose = this.onClose.bind(this);
-    this.webSocket.onerror = this.onError.bind(this);
+    try {
+        this.webSocket = new WebSocket(url);
+    } catch (e) {
+        this.webSocket = null;
+    }
+    if (this.webSocket) {
+        this.webSocket.onmessage = this.onMessage.bind(this);
+        this.webSocket.onopen = this.onOpen.bind(this);
+        this.webSocket.onclose = this.onClose.bind(this);
+        this.webSocket.onerror = this.onError.bind(this);
+    } else {
+        // TODO: show message to config panel.
+        addMessage('Failed to create WebSocket. (url is bad?)');
+    }
 };
 
 Server.prototype.disconnectFromServer = function() {
@@ -172,9 +181,20 @@ function onDisconnectConfig(port) {
 
 function onMessageFromConfig(msg, port) {
     if (msg['connect']) {
-        connectToServer();
+        var index = msg['index'];
+        if (index < servers.length) {
+            servers[index].connectToServer();
+        } else {
+            // This can happens if timing is bad.
+            addMessage('ignore message because index is out of bound.');
+        }
     } else if (msg['disconnect']) {
-        disconnectFromServer();
+        var index = msg['index'];
+        if (index < servers.length) {
+            servers[index].disconnectFromServer();
+        } else {
+            addMessage('ignore message because index is out of bound.');
+        }
     } else if (msg['reload']) {
         var settings = msg['reload'];
         console.log(settings);
@@ -189,15 +209,6 @@ var servers = [];
 
 function setUpServers(settings) {
     servers = [];
-    if (settings.length == 0) {
-        // We need at least one server.
-        // TODO: Remove this hack.
-        settings.push({'label': 'MyServer', 'host': 'localhost:8888'});
-    }
-    if (settings.length > 1) {
-        // We need to update onMessageFromConfig to support multiple connectios.
-        settings = [settings[0]];
-    }
     reloadData = [];
     for (var i = 0; i < settings.length; ++i) {
         servers.push(new Server(
