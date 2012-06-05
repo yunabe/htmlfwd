@@ -2,7 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"io"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -59,7 +60,11 @@ func detectWebSocketClose(ws *websocket.Conn, ch chan bool) {
 	for {
 		n, err := ws.Read(msg[:])
 		if err != nil {
-			fmt.Println("WebSocket read error:", err)
+			if (err == io.EOF) {
+				log.Println("Reached to WebSocket EOF")
+			} else {
+				log.Println("WebSocket read error:", err)
+			}
 			break
 		}
 		if n == 0 {
@@ -76,7 +81,7 @@ func createWebSocketCloseChannel(ws *websocket.Conn) chan bool {
 }
 
 func (server *WebServer) handleWebSocket(ws *websocket.Conn) {
-	// TODO: Handle a case where websocket is closed by peer.
+	log.Print("WebSocket connection is established.")
 	defer ws.Close()
 	wsEncoder := json.NewEncoder(ws)
 
@@ -98,12 +103,12 @@ Loop:
 			wsEncoder.Encode(ba)
 		case _, ok := <-wsCloseChan:
 			if !ok {
-				fmt.Println("WebSocket is closed by peer.")
+				log.Print("WebSocket is closed by peer.")
 				server.baChansMutex.Lock()
 				close(bachan)
 				for {
 					if _, ok := <-bachan; ok {
-						fmt.Println("BrowserAction is discarded.")
+						log.Print("BrowserAction is discarded.")
 					} else {
 						break
 					}
@@ -121,18 +126,18 @@ Loop:
 func (server *WebServer) handleForward(w http.ResponseWriter, req *http.Request) {
 	server.fowardMapMutex.Lock()
 	defer server.fowardMapMutex.Unlock()
-	fmt.Println("r.URL =", req.URL)
+	log.Print("r.URL =", req.URL)
 	pattern, _ := regexp.Compile("^/fwd/(\\d+)(/.*)$")
 	var matches []string = pattern.FindStringSubmatch(req.URL.String())
-	fmt.Println(matches)
+	log.Print(matches)
 	id, _ := strconv.ParseUint(matches[1], 10, 32)
 	proxy, ok := server.fowardMap[uint32(id)]
 	if !ok {
-		fmt.Println("....")
+		log.Print("....")
 		return
 	}
 	req.URL, _ = url.Parse(matches[2])
-	fmt.Println("proxy.ServeHTTP(w, req)")
+	log.Print("proxy.ServeHTTP(w, req)")
 	proxy.ServeHTTP(w, req)
 }
 
@@ -144,7 +149,7 @@ func (server *WebServer) RegisterProxy(host string) uint32 {
 	server.fowardMapMutex.Lock()
 	defer server.fowardMapMutex.Unlock()
 	id := rand.Uint32()
-	fmt.Println("register", id, host)
+	log.Print("register", id, host)
 	target := url.URL{
 		Scheme: "http",
 		Host:   host,
@@ -156,7 +161,7 @@ func (server *WebServer) RegisterProxy(host string) uint32 {
 func (server *WebServer) UnregisterProxy(id uint32) {
 	server.fowardMapMutex.Lock()
 	defer server.fowardMapMutex.Unlock()
-	fmt.Println("Unregister", id)
+	log.Print("Unregister", id)
 	delete(server.fowardMap, id)
 	server.sendBrowserAction(&BrowserAction{Id: id, CloseTabs: true})
 }
@@ -165,7 +170,7 @@ func (server *WebServer) sendBrowserAction(action *BrowserAction) {
 	server.baChansMutex.Lock()
 	defer server.baChansMutex.Unlock()
 	if len(server.baChans) == 0 {
-		fmt.Println("No websocket connection exists.")
+		log.Print("No websocket connection exists.")
 		return
 	}
 	for baChan, _ := range server.baChans {
@@ -174,13 +179,13 @@ func (server *WebServer) sendBrowserAction(action *BrowserAction) {
 		if len(baChan) != cap(baChan) {
 			baChan <- action
 		} else {
-			fmt.Println("baChan is full. Skipping...")
+			log.Print("baChan is full. Skipping...")
 		}
 	}
 }
 
 func handleClientConn(server *WebServer, conn net.Conn) {
-	fmt.Println("handleClientConn")
+	log.Print("handleClientConn")
 	defer conn.Close()
 	decoder := json.NewDecoder(conn)
 	registered := false
@@ -189,13 +194,13 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 		req := new(ClientReq)
 		err := decoder.Decode(req)
 		if err != nil {
-			fmt.Println(err)
+			log.Print(err)
 			break
 		}
-		fmt.Println(*req)
+		log.Print(*req)
 		if len(req.Host) > 0 {
 			if registered {
-				fmt.Println("Host is already registered.")
+				log.Print("Host is already registered.")
 			} else {
 				id = server.RegisterProxy(req.Host)
 				registered = true
@@ -206,7 +211,7 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 				action := BrowserAction{Id: id, OpenUrl: req.OpenUrl}
 				server.sendBrowserAction(&action)
 			} else {
-				fmt.Println("Can not open url because no host is registered.")
+				log.Print("Can not open url because no host is registered.")
 			}
 		}
 		if len(req.Notification) > 0 {
@@ -214,7 +219,7 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 				action := BrowserAction{Id: id, Notification: req.Notification}
 				server.sendBrowserAction(&action)
 			} else {
-				fmt.Println("Can not show notification because no host is registered.")
+				log.Print("Can not show notification because no host is registered.")
 			}
 		}
 	}
@@ -226,13 +231,13 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 func openClientServer(server *WebServer) {
 	ln, err := net.Listen("tcp", ":9999")
 	if err != nil {
-		fmt.Println("error:", err)
+		log.Print("error:", err)
 		return
 	}
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			fmt.Println("error:", err)
+			log.Print("error:", err)
 			continue
 		}
 		go handleClientConn(server, conn)
