@@ -1,4 +1,8 @@
 
+
+var retryIntervalMin = 10 * 1000;  // ms
+var retryIntervalMax = 10 * 60 * 1000;
+
 function addMessage(message) {
     console.log(message);
 }
@@ -31,8 +35,6 @@ Server.prototype.getStatusMessage = function() {
     return msg;
 };
 
-var servers = [];
-
 Server.prototype.sendStatusUpdate = function() {
     var updates = [];
     for (var i = 0; i < servers.length; ++i) {
@@ -44,15 +46,6 @@ Server.prototype.sendStatusUpdate = function() {
     }
     for (var i = 0; i < configPorts.length; ++i) {
         configPorts[i].postMessage({'update': updates});
-    }
-}
-
-var retryIntervalMin = 10 * 1000;  // ms
-var retryIntervalMax = 10 * 60 * 1000;
-
-function connectToServer() {
-    for (var i = 0; i < servers.length; ++i) {
-        servers[i].connectToServer();
     }
 }
 
@@ -72,12 +65,6 @@ Server.prototype.connectToServer = function() {
     this.webSocket.onerror = this.onError.bind(this);
 };
 
-function disconnectFromServer() {
-    for (var i = 0; i < servers.length; ++i) {
-        servers[i].disconnectFromServer();
-    }
-}
-
 Server.prototype.disconnectFromServer = function() {
     if (!this.webSocket) {
         clearTimeout(this.retryTimerId);
@@ -89,77 +76,6 @@ Server.prototype.disconnectFromServer = function() {
     this.webSocket.close();
     this.webSocket = null;
 };
-
-var configPorts = [];
-
-function onConnectConfig(port) {
-    configPorts.push(port);
-    var reloadData = [];
-    for (var i = 0; i < servers.length; ++i) {
-        reloadData.push(servers[i].getMessage());
-    }
-    port.postMessage({'reload': reloadData});
-    port.onDisconnect.addListener(onDisconnectConfig);
-    port.onMessage.addListener(onMessageFromConfig);
-}
-
-function onDisconnectConfig(port) {
-    for (var i = 0; i < configPorts.length; ++i) {
-        if (port == configPorts[i]) {
-            configPorts.splice(i, 1);
-            break;
-        }
-    }
-}
-
-function onMessageFromConfig(msg, port) {
-    if (msg['connect']) {
-        connectToServer();
-    } else if (msg['disconnect']) {
-        disconnectFromServer();
-    } else if (msg['reload']) {
-        var settings = msg['reload'];
-        console.log(settings);
-        localStorage['server-settings'] = JSON.stringify(settings);
-        disconnectFromServer();
-        setUpServers(settings);
-        connectToServer();
-    }
-}
-
-function setUpServers(settings) {
-    servers = [];
-    if (settings.length == 0) {
-        // We need at least one server.
-        // TODO: Remove this hack.
-        settings.push({'label': 'MyServer', 'host': 'localhost:8888'});
-    }
-    if (settings.length > 1) {
-        // We need to update onMessageFromConfig to support multiple connectios.
-        settings = [settings[0]];
-    }
-    reloadData = [];
-    for (var i = 0; i < settings.length; ++i) {
-        servers.push(new Server(
-            settings[i]['label'], settings[i]['host'], 'connecting'));
-        reloadData.push(servers[i].getMessage());
-    }
-    for (var i = 0; i < configPorts.length; ++i) {
-        configPorts[i].postMessage({'reload': reloadData});
-    }
-}
-
-function init() {
-    var settings;
-    try {
-        settings = JSON.parse(localStorage['server-settings']);
-    } catch (e) {
-        settings = [];
-    }
-    setUpServers(settings);
-    connectToServer();
-    chrome.extension.onConnect.addListener(onConnectConfig);
-}
 
 Server.prototype.onError = function(e) {
     addMessage('Encountered error.');
@@ -231,3 +147,88 @@ Server.prototype.onMessage = function(e) {
         });
     }
 };
+
+var configPorts = [];
+
+function onConnectConfig(port) {
+    configPorts.push(port);
+    var reloadData = [];
+    for (var i = 0; i < servers.length; ++i) {
+        reloadData.push(servers[i].getMessage());
+    }
+    port.postMessage({'reload': reloadData});
+    port.onDisconnect.addListener(onDisconnectConfig);
+    port.onMessage.addListener(onMessageFromConfig);
+}
+
+function onDisconnectConfig(port) {
+    for (var i = 0; i < configPorts.length; ++i) {
+        if (port == configPorts[i]) {
+            configPorts.splice(i, 1);
+            break;
+        }
+    }
+}
+
+function onMessageFromConfig(msg, port) {
+    if (msg['connect']) {
+        connectToServer();
+    } else if (msg['disconnect']) {
+        disconnectFromServer();
+    } else if (msg['reload']) {
+        var settings = msg['reload'];
+        console.log(settings);
+        localStorage['server-settings'] = JSON.stringify(settings);
+        disconnectFromServer();
+        setUpServers(settings);
+        connectToServer();
+    }
+}
+
+var servers = [];
+
+function setUpServers(settings) {
+    servers = [];
+    if (settings.length == 0) {
+        // We need at least one server.
+        // TODO: Remove this hack.
+        settings.push({'label': 'MyServer', 'host': 'localhost:8888'});
+    }
+    if (settings.length > 1) {
+        // We need to update onMessageFromConfig to support multiple connectios.
+        settings = [settings[0]];
+    }
+    reloadData = [];
+    for (var i = 0; i < settings.length; ++i) {
+        servers.push(new Server(
+            settings[i]['label'], settings[i]['host'], 'connecting'));
+        reloadData.push(servers[i].getMessage());
+    }
+    for (var i = 0; i < configPorts.length; ++i) {
+        configPorts[i].postMessage({'reload': reloadData});
+    }
+}
+
+function connectToServer() {
+    for (var i = 0; i < servers.length; ++i) {
+        servers[i].connectToServer();
+    }
+}
+
+function disconnectFromServer() {
+    for (var i = 0; i < servers.length; ++i) {
+        servers[i].disconnectFromServer();
+    }
+}
+
+function init() {
+    var settings;
+    try {
+        settings = JSON.parse(localStorage['server-settings']);
+    } catch (e) {
+        settings = [];
+    }
+    setUpServers(settings);
+    connectToServer();
+    chrome.extension.onConnect.addListener(onConnectConfig);
+}
