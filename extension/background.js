@@ -199,6 +199,8 @@ function onMessageFromConfig(msg, port) {
         var settings = msg['reload'];
         console.log(settings);
         localStorage['server-settings'] = JSON.stringify(settings);
+        // onclose fired by this disconnect is called 'after' connectToServer.
+        // TODO: Fix this issue
         disconnectFromServer();
         setUpServers(settings);
         connectToServer();
