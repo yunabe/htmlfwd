@@ -1,10 +1,17 @@
-var ws = null;
+
+function addMessage(message) {
+    console.log(message);
+}
 
 var Server = function(label, host) {
     this.label = label;
     this.host = host;
     this.status = 'connecting';
     this.nextRetryTime = 0;
+    this.webSocket = null;
+    this.retryTimerId = null;
+    this.connectionOpened = false;
+    this.retryInterval = retryIntervalMin;
 };
 
 Server.prototype.getMessage = function() {
@@ -26,55 +33,72 @@ Server.prototype.getStatusMessage = function() {
 
 var servers = [];
 
-function sendMessage() {
-    var input = document.getElementById('input').value;
-    if (!input) {
-        return;
+Server.prototype.sendStatusUpdate = function() {
+    var updates = [];
+    for (var i = 0; i < servers.length; ++i) {
+        if (servers[i] == this) {
+            updates.push(this.getStatusMessage());
+        } else {
+            updates.push(null);
+        }
     }
-    document.getElementById('input').value = '';
-    ws.send(input);
+    for (var i = 0; i < configPorts.length; ++i) {
+        configPorts[i].postMessage({'update': updates});
+    }
 }
 
 var retryIntervalMin = 10 * 1000;  // ms
 var retryIntervalMax = 10 * 60 * 1000;
-var retryInterval = retryIntervalMin;
 
 function connectToServer() {
-    // clear existing timer to avoid we create multi-timers.
-    clearTimeout(retryTimerId);
-    retryTimerId = null;
-    if (ws) {
-        return;
+    for (var i = 0; i < servers.length; ++i) {
+        servers[i].connectToServer();
     }
-    console.log('connectToServer');
-    var url = 'ws://' + servers[0].host + '/ws';
-    ws = new WebSocket(url);
-    ws.onmessage = onmessage;
-    ws.onopen = onopen;
-    ws.onclose = onclose;
-    ws.onerror = onerror;
 }
 
-function disconnectFromServer() {
-    if (!ws) {
-        clearTimeout(retryTimerId);
-        retryInterval = retryIntervalMin;
-        servers[0].status = 'disconnected';
-        for (var i = 0; i < configPorts.length; ++i) {
-            configPorts[i].postMessage(
-                {'update': [servers[0].getStatusMessage()]});
-        }
+Server.prototype.connectToServer = function() {
+    // clear existing timer to avoid we create multi-timers.
+    clearTimeout(this.retryTimerId);
+    this.retryTimerId = null;
+    if (this.webSocket) {
         return;
     }
-    ws.close();
-    ws = null;
+    addMessage('connectToServer');
+    var url = 'ws://' + this.host + '/ws';
+    this.webSocket = new WebSocket(url);
+    this.webSocket.onmessage = this.onMessage.bind(this);
+    this.webSocket.onopen = this.onOpen.bind(this);
+    this.webSocket.onclose = this.onClose.bind(this);
+    this.webSocket.onerror = this.onError.bind(this);
+};
+
+function disconnectFromServer() {
+    for (var i = 0; i < servers.length; ++i) {
+        servers[i].disconnectFromServer();
+    }
 }
+
+Server.prototype.disconnectFromServer = function() {
+    if (!this.webSocket) {
+        clearTimeout(this.retryTimerId);
+        this.retryInterval = retryIntervalMin;
+        this.status = 'disconnected';
+        this.sendStatusUpdate();
+        return;
+    }
+    this.webSocket.close();
+    this.webSocket = null;
+};
 
 var configPorts = [];
 
 function onConnectConfig(port) {
     configPorts.push(port);
-    port.postMessage({'reload': [servers[0].getMessage()]});
+    var reloadData = [];
+    for (var i = 0; i < servers.length; ++i) {
+        reloadData.push(servers[i].getMessage());
+    }
+    port.postMessage({'reload': reloadData});
     port.onDisconnect.addListener(onDisconnectConfig);
     port.onMessage.addListener(onMessageFromConfig);
 }
@@ -110,12 +134,18 @@ function setUpServers(settings) {
         // TODO: Remove this hack.
         settings.push({'label': 'MyServer', 'host': 'localhost:8888'});
     }
+    if (settings.length > 1) {
+        // We need to update onMessageFromConfig to support multiple connectios.
+        settings = [settings[0]];
+    }
+    reloadData = [];
     for (var i = 0; i < settings.length; ++i) {
         servers.push(new Server(
             settings[i]['label'], settings[i]['host'], 'connecting'));
+        reloadData.push(servers[i].getMessage());
     }
     for (var i = 0; i < configPorts.length; ++i) {
-        configPorts[i].postMessage({'reload': [servers[0].getMessage()]});
+        configPorts[i].postMessage({'reload': reloadData});
     }
 }
 
@@ -131,57 +161,43 @@ function init() {
     chrome.extension.onConnect.addListener(onConnectConfig);
 }
 
-function addMessage(message) {
-    console.log(message);
-}
-
-function onerror(e) {
+Server.prototype.onError = function(e) {
     addMessage('Encountered error.');
     addMessage(e)
-}
+};
 
-var connectionOpened = false;
-var retryTimerId = null;
+Server.prototype.onOpen = function() {
+    this.status = 'connected';
+    this.sendStatusUpdate();
+    this.connectionOpened = true;
+    this.retryInterval = retryIntervalMin;
+};
 
-function onopen(e) {
-    servers[0].status = 'connected';
-    for (var i = 0; i < configPorts.length; ++i) {
-        configPorts[i].postMessage({'update': [{'status': 'connected'}]});
-    }
-    connectionOpened = true;
-    retryInterval = retryIntervalMin;
-}
-
-function onclose(e) {
-    if (!connectionOpened) {
+Server.prototype.onClose = function() {
+    if (!this.connectionOpened) {
         console.log('Failed to connect to the server.');
     }
-    var canceled = ws == null;
-    connectionOpened = false;
-    ws = null;
+    var canceled = this.webSocket == null;
+    this.connectionOpened = false;
+    this.webSocket = null;
     if (canceled) {
         // if connection is canceled.
-        servers[0].status = 'disconnected';
-        for (var i = 0; i < configPorts.length; ++i) {
-            configPorts[i].postMessage(
-                {'update': [servers[0].getStatusMessage()]});
-        }
+        this.status = 'disconnected';
+        this.sendStatusUpdate();
         return;
     }
 
-    retryTimerId = setTimeout(connectToServer, retryInterval);
-    servers[0].status = 'connecting';
-    servers[0].nextRetryTime = Date.now() + retryInterval;
-    for (var i = 0; i < configPorts.length; ++i) {
-        configPorts[i].postMessage({'update': [servers[0].getStatusMessage()]});
+    this.retryTimerId = setTimeout(connectToServer, this.retryInterval);
+    this.status = 'connecting';
+    this.nextRetryTime = Date.now() + this.retryInterval;
+    this.sendStatusUpdate();
+    this.retryInterval = this.retryInterval * 2;
+    if (this.retryInterval > retryIntervalMax) {
+        this.retryInterval = retryIntervalMax;
     }
-    retryInterval = retryInterval * 2;
-    if (retryInterval > retryIntervalMax) {
-        retryInterval = retryIntervalMax;
-    }
-}
+};
 
-function onmessage(e) {
+Server.prototype.onMessage = function(e) {
     addMessage('Recieved: ' + e.data);
     var obj = JSON.parse(e.data);
     var id = obj['Id']
@@ -189,7 +205,7 @@ function onmessage(e) {
     var path = obj['OpenUrl']
     addMessage('url: ' + path)
     if (path) {
-        var url = 'http://' + servers[0].host + '/fwd/' + id + path;
+        var url = 'http://' + this.host + '/fwd/' + id + path;
         addMessage(url)
         addMessage(chrome)
         addMessage(chrome.tabs)
@@ -214,4 +230,4 @@ function onmessage(e) {
             }
         });
     }
-}
+};
