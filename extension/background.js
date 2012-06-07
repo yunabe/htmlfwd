@@ -3,8 +3,14 @@
 var retryIntervalMin = 10 * 1000;  // ms
 var retryIntervalMax = 10 * 60 * 1000;
 
-function addMessage(message) {
-    console.log(message);
+function addMessage(var_args) {
+    // either push or concat is not available with 'arguments'.
+    var args = []
+    for (var i = 0; i < arguments.length; ++i) {
+        args.push(arguments[i]);
+    }
+    args.push(new Date());
+    console.log.apply(console, args);
 }
 
 var Server = function(label, host) {
