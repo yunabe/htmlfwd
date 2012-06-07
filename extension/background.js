@@ -60,9 +60,10 @@ Server.prototype.connectToServer = function() {
     clearTimeout(this.retryTimerId);
     this.retryTimerId = null;
     if (this.webSocket) {
+        addMessage('Connection is already established.');
         return;
     }
-    addMessage('connectToServer');
+    addMessage('Connecting to server.');
     var url = 'ws://' + this.host + '/ws';
     try {
         this.webSocket = new WebSocket(url);
@@ -93,11 +94,11 @@ Server.prototype.disconnectFromServer = function() {
 };
 
 Server.prototype.onError = function(e) {
-    addMessage('Encountered error.');
-    addMessage(e)
+    addMessage('Encountered error:', this.label, e);
 };
 
-Server.prototype.onOpen = function() {
+Server.prototype.onOpen = function(e) {
+    addMessage('Connected to server:', this.label);
     this.status = 'connected';
     this.sendStatusUpdate();
     this.connectionOpened = true;
@@ -105,19 +106,24 @@ Server.prototype.onOpen = function() {
 };
 
 Server.prototype.onClose = function() {
+    addMessage('Websocket is closed:', this.label);
     if (!this.connectionOpened) {
-        console.log('Failed to connect to the server.');
+        addMessage('Failed to connect to the server:', this.label);
     }
     var canceled = this.webSocket == null;
     this.connectionOpened = false;
     this.webSocket = null;
     if (canceled) {
+        addMessage('Disconnected from server.');
         // if connection is canceled.
         this.status = 'disconnected';
         this.sendStatusUpdate();
         return;
     }
 
+    addMessage('Retring to connect the server in',
+               Math.floor(this.retryInterval / 1000),
+               'sec');
     this.retryTimerId = setTimeout(connectToServer, this.retryInterval);
     this.status = 'connecting';
     this.nextRetryTime = Date.now() + this.retryInterval;
@@ -129,21 +135,18 @@ Server.prototype.onClose = function() {
 };
 
 Server.prototype.onMessage = function(e) {
-    addMessage('Recieved: ' + e.data);
     var obj = JSON.parse(e.data);
+    addMessage('Recieved:', obj);
     var id = obj['Id']
-    addMessage('Id: ' + id)
     var path = obj['OpenUrl']
-    addMessage('url: ' + path)
     if (path) {
         var url = 'http://' + this.host + '/fwd/' + id + path;
-        addMessage(url)
-        addMessage(chrome)
-        addMessage(chrome.tabs)
+        addMessage('Open tab', url);
         chrome.tabs.create({'url': url, 'selected': true});
     }
     var notification = obj['Notification']
     if (notification) {
+        addMessage('Show notification:', notification);
         var popup = webkitNotifications.createNotification(
             "",  // no icon. Don't use null.
             "Notification",
@@ -153,6 +156,7 @@ Server.prototype.onMessage = function(e) {
     }
     var closeTabs = obj['CloseTabs']
     if (closeTabs) {
+        addMessage('Close tabs: id ==', id);
         chrome.tabs.getAllInWindow(null, function(tabs) {
             for (var i = 0; i < tabs.length; ++i) {
                 if (tabs[i].url.indexOf(String(id)) != -1) {
