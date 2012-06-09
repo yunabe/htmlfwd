@@ -2,7 +2,9 @@
 
 import json
 import os
+import re
 import socket
+import sys
 import time
 import threading
 import urllib
@@ -24,7 +26,25 @@ class ServerThread(threading.Thread):
     self.server.serve_forever()
 
 
+def load_command_port():
+  rcpath = os.path.join(os.path.expanduser('~'), '.htmlfwdrc')
+  try:
+    setting = file(rcpath, 'r').read()
+  except Exception, e:
+    print e
+    return -1
+  m = re.compile('command_port=(\d+)').search(setting)
+  if m:
+    return int(m.group(1))
+  else:
+    return -1
+
+
 def main():
+  command_port = load_command_port()
+  if command_port == -1:
+    print >> sys.stderr, 'Failed to load command_port from .htmlfwdrc'
+    command_port = 9999
   server = make_server('', 0, handler)
   port = server.socket.getsockname()[1]
 
@@ -32,7 +52,7 @@ def main():
   server_thread.start()
 
   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  sock.connect(('localhost', 9999))
+  sock.connect(('localhost', command_port))
   url = '/hello?%s' % urllib.urlencode({'name': os.getlogin()})
   req = json.dumps({'host': 'localhost:%d' % port,
                     'openurl': url})

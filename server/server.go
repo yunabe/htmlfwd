@@ -40,6 +40,7 @@ func (ba *BrowserAction) String() string {
 }
 
 type WebServer struct {
+	port           int32
 	mux            *http.ServeMux
 	fowardMap      map[uint32]*httputil.ReverseProxy
 	fowardMapMutex sync.Mutex
@@ -47,9 +48,10 @@ type WebServer struct {
 	baChansMutex   sync.Mutex
 }
 
-func NewWebServer() *WebServer {
+func NewWebServer(port int32) *WebServer {
 	mux := http.NewServeMux()
 	server := WebServer{
+		port:      port,
 		fowardMap: make(map[uint32]*httputil.ReverseProxy),
 		mux:       mux,
 		baChans:   make(map[chan *BrowserAction]bool),
@@ -131,7 +133,7 @@ Loop:
 			} else {
 				panic("wsCloseChan had data")
 			}
-		case <- timer:
+		case <-timer:
 			// TODO: timer channel is deleted by GC correctly?
 			log.Println("Sending keep-alive traffic.")
 			wsEncoder.Encode(&BrowserAction{KeepAlive: true})
@@ -158,7 +160,11 @@ func (server *WebServer) handleForward(w http.ResponseWriter, req *http.Request)
 }
 
 func (server *WebServer) ListenAndServe() {
-	http.ListenAndServe(":8080", server.mux)
+	log.Println("Listening to websockets on", server.port)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", server.port), server.mux)
+	if err != nil {
+		log.Println("Failed to listen:", err)
+	}
 }
 
 func (server *WebServer) RegisterProxy(host string) uint32 {
@@ -250,8 +256,9 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 	}
 }
 
-func openClientServer(server *WebServer) {
-	ln, err := net.Listen("tcp", ":9999")
+func openClientServer(port int32, server *WebServer) {
+	log.Println("Listening to command connections on", port)
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Println("Failed to listen at client server port:", err)
 		return

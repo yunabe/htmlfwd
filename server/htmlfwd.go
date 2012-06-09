@@ -7,7 +7,8 @@ import (
 
 func main() {
 	rand.Seed(int64(time.Now().Nanosecond()))
-	server := NewWebServer()
+	setting := readSetting()
+	server := NewWebServer(setting.browserPort)
 	go server.ListenAndServe()
-	openClientServer(server)
+	openClientServer(setting.commandPort, server)
 }
