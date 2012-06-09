@@ -13,9 +13,12 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"time"
 
 	"code.google.com/p/go.net/websocket"
 )
+
+const keep_alive_interval = 60
 
 type ClientReq struct {
 	Host         string
@@ -28,6 +31,7 @@ type BrowserAction struct {
 	OpenUrl      string
 	CloseTabs    bool
 	Notification string
+	KeepAlive    bool
 }
 
 func (ba *BrowserAction) String() string {
@@ -100,6 +104,7 @@ func (server *WebServer) handleWebSocket(ws *websocket.Conn) {
 
 Loop:
 	for {
+		timer := time.After(keep_alive_interval * 1000 * 1000 * 1000)
 		select {
 		case ba, ok := <-bachan:
 			if !ok {
@@ -126,6 +131,10 @@ Loop:
 			} else {
 				panic("wsCloseChan had data")
 			}
+		case <- timer:
+			// TODO: timer channel is deleted by GC correctly?
+			log.Println("Sending keep-alive traffic.")
+			wsEncoder.Encode(&BrowserAction{KeepAlive: true})
 		}
 	}
 }

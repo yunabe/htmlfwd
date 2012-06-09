@@ -137,6 +137,10 @@ Server.prototype.onClose = function() {
 Server.prototype.onMessage = function(e) {
     var obj = JSON.parse(e.data);
     addMessage('Recieved:', obj);
+    if (obj['KeepAlive'] == true) {
+        addMessage('Recieved keep-alive traffic.');
+        return;
+    }
     var id = obj['Id']
     var path = obj['OpenUrl']
     if (path) {
