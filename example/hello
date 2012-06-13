@@ -11,10 +11,42 @@ import urllib
 import urlparse
 from wsgiref.simple_server import make_server
 
+CLIENT_ID = '1k3dmv'
+
+HELLO_HTML = '''
+<html>
+  <head>
+    <link rel="stylesheet" type="text/css" href="/shared/1k3dmv/style.css">
+  </head>
+  <body>
+    Hello <span class="name">%s</span>
+  </body>
+</html>
+'''
+
+CSS = '''
+.name {
+  color: #800;
+}
+'''
+
 def handler(env, start_response):
-  start_response('200 OK', [('Content-Type', 'text/html')])
-  params = urlparse.parse_qs(env['QUERY_STRING'])
-  return ['Hello %s' % ', '.join(params.get('name', []))]
+  path = env['PATH_INFO']
+  if path == '/hello':
+    start_response('200 OK', [('Content-Type', 'text/html')])
+    params = urlparse.parse_qs(env['QUERY_STRING'])
+    names = ', '.join(params.get('name', []))
+    return [HELLO_HTML % names]
+  elif path == '/shared/style.css':
+    # Set long cache-age to reduce traffic of shared resources.
+    start_response('200 OK',
+                   [('Content-Type', 'text/css'),
+                    ('Cache-Control', 'private, max-age=31536000'),  # 1 year
+                    ])
+    return [CSS]
+  else:
+    start_response('404 Not Found', [('Content-Type', 'text/html')])
+    return ['Not Found']
 
 
 class ServerThread(threading.Thread):
@@ -55,7 +87,8 @@ def main():
   sock.connect(('localhost', command_port))
   url = '/hello?%s' % urllib.urlencode({'name': os.getlogin()})
   req = json.dumps({'host': 'localhost:%d' % port,
-                    'openurl': url})
+                    'openurl': url,
+                    'clientid': CLIENT_ID})
   sock.send(req)
 
   notification_req = json.dumps(

@@ -24,6 +24,7 @@ type ClientReq struct {
 	Host         string
 	OpenUrl      string
 	Notification string
+	ClientId     string
 }
 
 type BrowserAction struct {
@@ -43,6 +44,7 @@ type WebServer struct {
 	port           int32
 	mux            *http.ServeMux
 	fowardMap      map[uint32]*httputil.ReverseProxy
+	sharedMap      map[string]uint32
 	fowardMapMutex sync.Mutex
 	baChans        map[chan *BrowserAction]bool
 	baChansMutex   sync.Mutex
@@ -53,6 +55,7 @@ func NewWebServer(port int32) *WebServer {
 	server := WebServer{
 		port:      port,
 		fowardMap: make(map[uint32]*httputil.ReverseProxy),
+		sharedMap: make(map[string]uint32),
 		mux:       mux,
 		baChans:   make(map[chan *BrowserAction]bool),
 	}
@@ -63,6 +66,9 @@ func NewWebServer(port int32) *WebServer {
 		}))
 	mux.HandleFunc("/fwd/", func(w http.ResponseWriter, req *http.Request) {
 		server.handleForward(w, req)
+	})
+	mux.HandleFunc("/shared/", func(w http.ResponseWriter, req *http.Request) {
+		server.handleShared(w, req)
 	})
 	return &server
 }
@@ -147,7 +153,10 @@ func (server *WebServer) handleForward(w http.ResponseWriter, req *http.Request)
 	log.Println("r.URL =", req.URL)
 	pattern, _ := regexp.Compile("^/fwd/(\\d+)(/.*)$")
 	var matches []string = pattern.FindStringSubmatch(req.URL.String())
-	log.Println(matches)
+	if len(matches) == 0 {
+		log.Println("Invalid url pattern.")
+		return
+	}
 	id, _ := strconv.ParseUint(matches[1], 10, 32)
 	proxy, ok := server.fowardMap[uint32(id)]
 	if !ok {
@@ -155,6 +164,32 @@ func (server *WebServer) handleForward(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	req.URL, _ = url.Parse(matches[2])
+	log.Println("proxy.ServeHTTP(w, req)")
+	proxy.ServeHTTP(w, req)
+}
+
+func (server *WebServer) handleShared(w http.ResponseWriter, req *http.Request) {
+	server.fowardMapMutex.Lock()
+	defer server.fowardMapMutex.Unlock()
+	log.Println("r.URL =", req.URL)
+	pattern, _ := regexp.Compile("^/shared/([\\w\\-]+)/(.*)$")
+	var matches []string = pattern.FindStringSubmatch(req.URL.String())
+	if len(matches) == 0 {
+		log.Println("Invalid url pattern!")
+		return
+	}
+	uuid := matches[1]
+	id, ok := server.sharedMap[uuid]
+	if !ok {
+		log.Println("Client id is not registered:", uuid)
+		return
+	}
+	proxy, ok := server.fowardMap[id]
+	if !ok {
+		log.Println("%d is not registered.", id)
+		return
+	}
+	req.URL, _ = url.Parse("/shared/" + matches[2])
 	log.Println("proxy.ServeHTTP(w, req)")
 	proxy.ServeHTTP(w, req)
 }
@@ -188,6 +223,18 @@ func (server *WebServer) UnregisterProxy(id uint32) {
 	server.sendBrowserAction(&BrowserAction{Id: id, CloseTabs: true})
 }
 
+func (server *WebServer) RegisterSharedMap(clientId string, proxyId uint32) {
+	server.fowardMapMutex.Lock()
+	defer server.fowardMapMutex.Unlock()
+	server.sharedMap[clientId] = proxyId
+}
+
+func (server *WebServer) UnregisterSharedMap(clientId string) {
+	server.fowardMapMutex.Lock()
+	defer server.fowardMapMutex.Unlock()
+	delete(server.sharedMap, clientId)
+}
+
 func (server *WebServer) sendBrowserAction(action *BrowserAction) {
 	server.baChansMutex.Lock()
 	defer server.baChansMutex.Unlock()
@@ -212,8 +259,10 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 	log.Println("An connection with a client is established.")
 	defer conn.Close()
 	decoder := json.NewDecoder(conn)
-	registered := false
-	var id uint32
+	proxyRegistered := false
+	shareMapRegistered := false
+	var proxyId uint32
+	var clientId string
 	for {
 		req := new(ClientReq)
 		err := decoder.Decode(req)
@@ -225,34 +274,48 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 			}
 			break
 		}
-		log.Println(*req)
+		log.Println("Client request:", *req)
 		if len(req.Host) > 0 {
-			if registered {
+			if proxyRegistered {
 				log.Println("Host is already registered.")
 			} else {
-				id = server.RegisterProxy(req.Host)
-				registered = true
+				proxyId = server.RegisterProxy(req.Host)
+				proxyRegistered = true
 			}
 		}
+		if len(req.ClientId) > 0 {
+			if len(clientId) > 0 {
+				log.Println("Client id is already registered. Ignored.")
+			} else {
+				clientId = req.ClientId
+			}
+		}
+		if proxyRegistered && len(clientId) > 0 && !shareMapRegistered {
+			server.RegisterSharedMap(clientId, proxyId)
+			shareMapRegistered = true
+		}
 		if len(req.OpenUrl) > 0 {
-			if registered {
-				action := BrowserAction{Id: id, OpenUrl: req.OpenUrl}
+			if proxyRegistered {
+				action := BrowserAction{Id: proxyId, OpenUrl: req.OpenUrl}
 				server.sendBrowserAction(&action)
 			} else {
 				log.Println("Can not open url because no host is registered.")
 			}
 		}
 		if len(req.Notification) > 0 {
-			if registered {
-				action := BrowserAction{Id: id, Notification: req.Notification}
+			if proxyRegistered {
+				action := BrowserAction{Id: proxyId, Notification: req.Notification}
 				server.sendBrowserAction(&action)
 			} else {
 				log.Println("Can not show notification because no host is registered.")
 			}
 		}
 	}
-	if registered {
-		server.UnregisterProxy(id)
+	if shareMapRegistered {
+		server.UnregisterSharedMap(clientId)
+	}
+	if proxyRegistered {
+		server.UnregisterProxy(proxyId)
 	}
 }
 
