@@ -124,7 +124,8 @@ Server.prototype.onClose = function() {
     addMessage('Retring to connect the server in',
                Math.floor(this.retryInterval / 1000),
                'sec');
-    this.retryTimerId = setTimeout(connectToServer, this.retryInterval);
+    this.retryTimerId = setTimeout(this.connectToServer.bind(this),
+                                   this.retryInterval);
     this.status = 'connecting';
     this.nextRetryTime = Date.now() + this.retryInterval;
     this.sendStatusUpdate();
