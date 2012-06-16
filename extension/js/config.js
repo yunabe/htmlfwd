@@ -148,7 +148,9 @@ var onMessageFromBackground = function(msg, port) {
 
 var onClickSettingLink = function() {
     var mainBody = document.getElementById('main');
-    mainBody.style['-webkit-transform'] = 'translate(-300px)';
+    // Use left instead of webkit-translate because it seems like Chrome has
+    // a bug that text boxes in translated div are broken.
+    mainBody.style['left'] = '-300px';
     var servers = [];
     for (var i = 0; i < serverEntries.length; ++i) {
         servers.push({label: serverEntries[i].label,
@@ -172,11 +174,11 @@ var onClickSettingLink = function() {
                 }
             }
             bgPort.postMessage({'reload': settings});
-            mainBody.style['-webkit-transform'] = 'translate(0px)';
+            mainBody.style['left'] = '';
         });
     document.getElementById('setting-cancel-button').addEventListener(
         'click', function() {
-            mainBody.style['-webkit-transform'] = 'translate(0px)';
+            mainBody.style['left'] = '';
         });
 };
 
