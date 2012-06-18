@@ -28,16 +28,23 @@
         display: table-cell;
       }
     </style>
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
   </head>
-  <body>
+  <body style="padding-top:10px;padding-left:10px">
     <div style="width:250px;height:300px">
       <div id="main" style="width:600px;display:table;position:relative">
         <div style="width:300px;display:table-cell">
           <div>
-            <b style="font-size:large">Servers</b> -
-            <span id="setting-link" style="color:#47e;cursor:pointer">Setting</span>
+            <span style="font-size:large">Servers</span>
+            <span id="setting-link"
+                  class="btn"
+                  style="position:relative;left:120px;width:30px">
+              <i class="icon-wrench"></i>
+            </span>
           </div>
-          <ul id="server-list" class="sl" style="padding-left:0px;list-style:none"></ul>
+          <ul id="server-list"
+              class="sl"
+              style="padding-left:0px;margin-left:0px;list-style:none"></ul>
         </div>
         <div id="sub" style="width:300px;display:table-cell"></div>
       </div>

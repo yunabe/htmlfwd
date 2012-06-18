@@ -62,15 +62,17 @@
       {foreach $server in $servers}
         <div>
           <span><input type="text" class="label-text"
-                       value="{$server.label}"></span>
+                       value="{$server.label}"
+                       style="width:110px"></span>
           <span><input type="text" class="host-text"
-                       value="{$server.host}"></span>
+                       value="{$server.host}"
+                       style="width:110px"></span>
         </div>
       {/foreach}
     </div>
     <div>
-      <input id="setting-save-button" type="button" value="Save">
-      <input id="setting-cancel-button" type="button" value="Cancel">
+      <input id="setting-save-button" type="button" value="Save" class="btn btn-danger">&nbsp;
+      <input id="setting-cancel-button" type="button" value="Cancel" class="btn">
     </div>
   </div>
 {/template}
