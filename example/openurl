@@ -1,0 +1,43 @@
+#!/usr/bin/python
+
+import json
+import os
+import re
+import socket
+import sys
+
+
+def load_command_port():
+  rcpath = os.path.join(os.path.expanduser('~'), '.htmlfwdrc')
+  try:
+    setting = file(rcpath, 'r').read()
+  except Exception, e:
+    print e
+    return -1
+  m = re.compile('command_port=(\d+)').search(setting)
+  if m:
+    return int(m.group(1))
+  else:
+    return -1
+
+
+def main():
+  if len(sys.argv) != 2 or not (
+    sys.argv[1].startswith('http://') or sys.argv[1].startswith('https://')):
+    print 'Usage: openurl <absolute url>'
+    sys.exit(1)
+  
+  command_port = load_command_port()
+  if command_port == -1:
+    print >> sys.stderr, 'Failed to load command_port from .htmlfwdrc'
+    command_port = 9999
+
+  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  sock.connect(('localhost', command_port))
+  url = sys.argv[1]
+  req = json.dumps({'openurl': url})
+  sock.send(req)
+
+
+if __name__ == '__main__':
+  main()

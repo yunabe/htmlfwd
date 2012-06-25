@@ -143,8 +143,11 @@ Server.prototype.onMessage = function(e) {
         return;
     }
     var id = obj['Id']
-    var path = obj['OpenUrl']
-    if (path) {
+    var path = obj['OpenUrl'] || '';
+    if (path.indexOf('http://') == 0 || path.indexOf('https://') == 0) {
+        addMessage('Open abs tab:', path);
+        chrome.tabs.create({'url': path, 'selected': true});
+    } else if (path.indexOf('/') == 0) {
         var url = 'http://' + this.host + '/fwd/' + id + path;
         addMessage('Open tab', url);
         chrome.tabs.create({'url': url, 'selected': true});

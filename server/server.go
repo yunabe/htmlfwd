@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,7 +296,10 @@ func handleClientConn(server *WebServer, conn net.Conn) {
 			shareMapRegistered = true
 		}
 		if len(req.OpenUrl) > 0 {
-			if proxyRegistered {
+			if strings.HasPrefix(req.OpenUrl, "http://") || strings.HasPrefix(req.OpenUrl, "https://") {
+				action := BrowserAction{OpenUrl: req.OpenUrl}
+				server.sendBrowserAction(&action)
+			} else if proxyRegistered {
 				action := BrowserAction{Id: proxyId, OpenUrl: req.OpenUrl}
 				server.sendBrowserAction(&action)
 			} else {
