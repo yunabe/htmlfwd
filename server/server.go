@@ -29,11 +29,12 @@ type ClientReq struct {
 }
 
 type BrowserAction struct {
-	Id           uint32
-	OpenUrl      string
-	CloseTabs    bool
-	Notification string
-	KeepAlive    bool
+	Id                uint32
+	OpenUrl           string
+	CloseTabs         bool
+	Notification      string
+	KeepAlive         bool
+	KeepAliveInterval uint32
 }
 
 func (ba *BrowserAction) String() string {
@@ -111,6 +112,8 @@ func (server *WebServer) handleWebSocket(ws *websocket.Conn) {
 
 	wsCloseChan := createWebSocketCloseChannel(ws)
 
+	log.Println("Sending keep-alive interval.")
+	wsEncoder.Encode(&BrowserAction{KeepAliveInterval: keep_alive_interval})
 Loop:
 	for {
 		timer := time.After(keep_alive_interval * 1000 * 1000 * 1000)

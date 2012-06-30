@@ -2,6 +2,7 @@
 
 var retryIntervalMin = 10 * 1000;  // ms
 var retryIntervalMax = 10 * 60 * 1000;
+var keepAliveIntervalMargin = 10;
 
 function addMessage(var_args) {
     // either push or concat is not available with 'arguments'.
@@ -22,6 +23,8 @@ var Server = function(label, host) {
     this.retryTimerId = null;
     this.connectionOpened = false;
     this.retryInterval = retryIntervalMin;
+    this.keepAliveTimerId = null;
+    this.keepAliveInterval = -1;
 };
 
 Server.prototype.getMessage = function() {
@@ -89,8 +92,15 @@ Server.prototype.disconnectFromServer = function() {
         this.sendStatusUpdate();
         return;
     }
+    addMessage('Disconnecting from server.');
+    this.webSocket.onmessage = null;
+    this.webSocket.onopen = null;
+    this.webSocket.onclose = null;
+    this.webSocket.onerror = null;
     this.webSocket.close();
     this.webSocket = null;
+    this.status = 'disconnected';
+    this.sendStatusUpdate();
 };
 
 Server.prototype.onError = function(e) {
@@ -110,17 +120,8 @@ Server.prototype.onClose = function() {
     if (!this.connectionOpened) {
         addMessage('Failed to connect to the server:', this.label);
     }
-    var canceled = this.webSocket == null;
     this.connectionOpened = false;
     this.webSocket = null;
-    if (canceled) {
-        addMessage('Disconnected from server.');
-        // if connection is canceled.
-        this.status = 'disconnected';
-        this.sendStatusUpdate();
-        return;
-    }
-
     addMessage('Retring to connect the server in',
                Math.floor(this.retryInterval / 1000),
                'sec');
@@ -135,11 +136,37 @@ Server.prototype.onClose = function() {
     }
 };
 
+Server.prototype.resetKeepAliveTimeout = function() {
+    if (this.keepAliveTimerId != null) {
+        clearTimeout(this.keepAliveTimerId);
+    }
+    if (this.keepAliveInterval < 0) {
+        addMessage('keep alive interval must be set.');
+        return;
+    }
+    this.keepAliveTimerId = setTimeout(
+        this.onKeepAliveTimeout.bind(this),
+        (this.keepAliveInterval + keepAliveIntervalMargin) * 1000);
+};
+
+Server.prototype.onKeepAliveTimeout = function(e) {
+    addMessage('No keep alive traffic. Reconnecting...');
+    // onclose fired by this disconnect is called 'after' connectToServer.
+    this.disconnectFromServer();
+    this.connectToServer();
+};
+
 Server.prototype.onMessage = function(e) {
     var obj = JSON.parse(e.data);
     addMessage('Recieved:', obj);
+    if (obj['KeepAliveInterval']) {
+        addMessage('Set KeepAliveInterval:', obj['KeepAliveInterval']);
+        this.keepAliveInterval = obj['KeepAliveInterval'];
+        this.resetKeepAliveTimeout();
+    }
     if (obj['KeepAlive'] == true) {
         addMessage('Recieved keep-alive traffic.');
+        this.resetKeepAliveTimeout();
         return;
     }
     var id = obj['Id']
