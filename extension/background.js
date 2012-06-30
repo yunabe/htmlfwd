@@ -93,6 +93,7 @@ Server.prototype.disconnectFromServer = function() {
         return;
     }
     addMessage('Disconnecting from server.');
+    clearTimeout(this.keepAliveTimerId);
     this.webSocket.onmessage = null;
     this.webSocket.onopen = null;
     this.webSocket.onclose = null;
@@ -120,6 +121,7 @@ Server.prototype.onClose = function() {
     if (!this.connectionOpened) {
         addMessage('Failed to connect to the server:', this.label);
     }
+    clearTimeout(this.keepAliveTimerId);
     this.connectionOpened = false;
     this.webSocket = null;
     addMessage('Retring to connect the server in',
