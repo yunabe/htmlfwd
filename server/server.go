@@ -19,8 +19,6 @@ import (
 	"code.google.com/p/go.net/websocket"
 )
 
-const keep_alive_interval = 60
-
 type ClientReq struct {
 	Host         string
 	OpenUrl      string
@@ -43,23 +41,25 @@ func (ba *BrowserAction) String() string {
 }
 
 type WebServer struct {
-	port           int32
-	mux            *http.ServeMux
-	fowardMap      map[uint32]*httputil.ReverseProxy
-	sharedMap      map[string]uint32
-	fowardMapMutex sync.Mutex
-	baChans        map[chan *BrowserAction]bool
-	baChansMutex   sync.Mutex
+	port                    int32
+	keep_alive_interval_sec int32
+	mux                     *http.ServeMux
+	fowardMap               map[uint32]*httputil.ReverseProxy
+	sharedMap               map[string]uint32
+	fowardMapMutex          sync.Mutex
+	baChans                 map[chan *BrowserAction]bool
+	baChansMutex            sync.Mutex
 }
 
-func NewWebServer(port int32) *WebServer {
+func NewWebServer(port int32, keep_alive_interval_sec int32) *WebServer {
 	mux := http.NewServeMux()
 	server := WebServer{
-		port:      port,
-		fowardMap: make(map[uint32]*httputil.ReverseProxy),
-		sharedMap: make(map[string]uint32),
-		mux:       mux,
-		baChans:   make(map[chan *BrowserAction]bool),
+		port: port,
+		keep_alive_interval_sec: keep_alive_interval_sec,
+		fowardMap:               make(map[uint32]*httputil.ReverseProxy),
+		sharedMap:               make(map[string]uint32),
+		mux:                     mux,
+		baChans:                 make(map[chan *BrowserAction]bool),
 	}
 	mux.Handle("/ws", websocket.Handler(
 		func(ws *websocket.Conn) {
@@ -113,10 +113,11 @@ func (server *WebServer) handleWebSocket(ws *websocket.Conn) {
 	wsCloseChan := createWebSocketCloseChannel(ws)
 
 	log.Println("Sending keep-alive interval.")
-	wsEncoder.Encode(&BrowserAction{KeepAliveInterval: keep_alive_interval})
+	wsEncoder.Encode(&BrowserAction{KeepAliveInterval: uint32(server.keep_alive_interval_sec)})
 Loop:
 	for {
-		timer := time.After(keep_alive_interval * 1000 * 1000 * 1000)
+		timer := time.After(
+			time.Duration(server.keep_alive_interval_sec) * 1000 * 1000 * 1000)
 		select {
 		case ba, ok := <-bachan:
 			if !ok {
