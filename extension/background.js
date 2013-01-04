@@ -292,3 +292,5 @@ function init() {
     connectToServer();
     chrome.extension.onConnect.addListener(onConnectConfig);
 }
+
+init();

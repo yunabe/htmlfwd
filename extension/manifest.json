@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "description": "Web socket test.",
   "background": {
-    "page": "background.html"
+    "scripts": ["background.js"]
   },
   "browser_action": {
     "default_title": "HTMLFwd",      // optional; shown in tooltip
