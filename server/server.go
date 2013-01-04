@@ -41,6 +41,7 @@ func (ba *BrowserAction) String() string {
 }
 
 type WebServer struct {
+	setting                 *Setting
 	port                    int32
 	keep_alive_interval_sec int32
 	mux                     *http.ServeMux
@@ -51,9 +52,12 @@ type WebServer struct {
 	baChansMutex            sync.Mutex
 }
 
-func NewWebServer(port int32, keep_alive_interval_sec int32) *WebServer {
+func NewWebServer(setting *Setting) *WebServer {
+	port := setting.browserPort
+	keep_alive_interval_sec := setting.keepAliveIntervalSec
 	mux := http.NewServeMux()
 	server := WebServer{
+		setting: setting,
 		port: port,
 		keep_alive_interval_sec: keep_alive_interval_sec,
 		fowardMap:               make(map[uint32]*httputil.ReverseProxy),
@@ -201,7 +205,16 @@ func (server *WebServer) handleShared(w http.ResponseWriter, req *http.Request) 
 
 func (server *WebServer) ListenAndServe() {
 	log.Println("Listening to websockets on", server.port)
-	err := http.ListenAndServe(fmt.Sprintf(":%d", server.port), server.mux)
+	var err error
+	if server.setting.useSsl {
+		err = http.ListenAndServeTLS(
+			fmt.Sprintf(":%d", server.port),
+			server.setting.serverCertificate,
+			server.setting.serverPrivateKey,
+			server.mux)
+	} else {
+		err = http.ListenAndServe(fmt.Sprintf(":%d", server.port), server.mux)
+	}
 	if err != nil {
 		log.Println("Failed to listen:", err)
 	}
