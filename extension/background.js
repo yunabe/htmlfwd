@@ -14,9 +14,10 @@ function addMessage(var_args) {
     console.log.apply(console, args);
 }
 
-var Server = function(label, host) {
+var Server = function(label, host, is_ssl) {
     this.label = label;
     this.host = host;
+    this.is_ssl = is_ssl;
     this.status = 'connecting';
     this.nextRetryTime = 0;
     this.webSocket = null;
@@ -31,6 +32,7 @@ Server.prototype.getMessage = function() {
     var msg = this.getStatusMessage();
     msg['label'] = this.label;
     msg['host'] = this.host;
+    msg['is_ssl'] = this.is_ssl
     return msg;
 };
 
@@ -67,7 +69,8 @@ Server.prototype.connectToServer = function() {
         return;
     }
     addMessage('Connecting to server.');
-    var url = 'ws://' + this.host + '/ws';
+    var protocol = this.is_ssl ? 'wss://' : 'ws:';
+    var url = protocol + this.host + '/ws';
     try {
         this.webSocket = new WebSocket(url);
     } catch (e) {
@@ -177,7 +180,8 @@ Server.prototype.onMessage = function(e) {
         addMessage('Open abs tab:', path);
         chrome.tabs.create({'url': path, 'selected': true});
     } else if (path.indexOf('/') == 0) {
-        var url = 'http://' + this.host + '/fwd/' + id + path;
+        var protocol = this.is_ssl ? 'https://' : 'http://';
+        var url = protocol + this.host + '/fwd/' + id + path;
         addMessage('Open tab', url);
         chrome.tabs.create({'url': url, 'selected': true});
     }
@@ -244,7 +248,8 @@ function onMessageFromConfig(msg, port) {
         }
     } else if (msg['reload']) {
         var settings = msg['reload'];
-        console.log(settings);
+        var json_setting = JSON.stringify(settings);
+        console.log('Setting', json_setting);
         localStorage['server-settings'] = JSON.stringify(settings);
         // onclose fired by this disconnect is called 'after' connectToServer.
         // TODO: Fix this issue
@@ -261,7 +266,10 @@ function setUpServers(settings) {
     reloadData = [];
     for (var i = 0; i < settings.length; ++i) {
         servers.push(new Server(
-            settings[i]['label'], settings[i]['host'], 'connecting'));
+            settings[i]['label'],
+            settings[i]['host'],
+            settings[i]['is_ssl'], 
+            'connecting'));
         reloadData.push(servers[i].getMessage());
     }
     for (var i = 0; i < configPorts.length; ++i) {

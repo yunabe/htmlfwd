@@ -11,11 +11,12 @@ goog.require('goog.events');
  * @constructor
  */
 yunabe.htmlfwd.config.ServerEntry =
-    function(index, label, host, status, opt_retry_sec) {
+    function(index, label, host, is_ssl, status, opt_retry_sec) {
     this.index = index;
     this.label = label;
     this.host = host;
     this.status = status;
+    this.is_ssl = is_ssl;
     this.bodyId = 'body' + goog.getUid(this);
     this.checkId = 'check' + goog.getUid(this);
     this.labelId = 'label' + goog.getUid(this);
@@ -122,7 +123,7 @@ var onMessageFromBackground = function(msg, port) {
         for (var idx = 0; idx < servers.length; ++idx) {
             var setting = servers[idx];
             var server = new yunabe.htmlfwd.config.ServerEntry(
-                idx, setting['label'], setting['host'],
+                idx, setting['label'], setting['host'], setting['is_ssl'],
                 setting['status'], setting['retry_sec'] || 0);
             serverEntries.push(server);
             htmls.push(server.render());
@@ -154,10 +155,11 @@ var onClickSettingLink = function() {
     var servers = [];
     for (var i = 0; i < serverEntries.length; ++i) {
         servers.push({label: serverEntries[i].label,
-                      host: serverEntries[i].host});
+                      host: serverEntries[i].host,
+                      is_ssl: serverEntries[i].is_ssl});
     }
     for (var i = 0; i < 2; ++i) {
-        servers.push({label: '', host: ''});
+        servers.push({label: '', host: '', is_ssl: false});
     }
     var subDiv = document.getElementById('sub');
     subDiv.innerHTML = yunabe.htmlfwd.soy.settingPanel({servers: servers});
@@ -165,12 +167,16 @@ var onClickSettingLink = function() {
         'click', function() {
             var labels = document.getElementsByClassName('label-text');
             var hosts = document.getElementsByClassName('host-text');
+            var is_ssls = document.getElementsByClassName('is-ssl');
             var settings = [];
             for (var i = 0; i < labels.length || i < hosts.length; ++i) {
                 var label = labels.length > i ? labels[i].value : '';
                 var host = hosts.length > i ? hosts[i].value : '';
+                var is_ssl = is_ssls.length > i ? is_ssls[i].checked : false;
                 if (label || host) {
-                    settings.push({'label': label, 'host': host});
+                    settings.push({'label': label,
+                                   'host': host,
+                                   'is_ssl': is_ssl});
                 }
             }
             bgPort.postMessage({'reload': settings});

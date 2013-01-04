@@ -67,6 +67,8 @@
           <span><input type="text" class="host-text"
                        value="{$server.host}"
                        style="width:150px"></span>
+          <span><input type="checkbox" {if $server.is_ssl}checked {/if}
+                       class="is-ssl">SSL</span>
         </div>
       {/foreach}
     </div>
