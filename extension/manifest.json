@@ -1,8 +1,11 @@
 {
   "name": "HTMLForwarding",
+  "manifest_version": 2,
   "version": "0.0.1",
   "description": "Web socket test.",
-  "background_page": "background.html",
+  "background": {
+    "page": "background.html"
+  },
   "browser_action": {
     "default_title": "HTMLFwd",      // optional; shown in tooltip
     "default_popup": "config.html"    // use config_tab.html for debug.
