@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,7 +63,7 @@ func NewWebServer(setting *Setting) *WebServer {
 	mux := http.NewServeMux()
 	server := WebServer{
 		setting: setting,
-		port: port,
+		port:    port,
 		keep_alive_interval_sec: keep_alive_interval_sec,
 		fowardMap:               make(map[uint32]*httputil.ReverseProxy),
 		sharedMap:               make(map[string]uint32),
@@ -207,11 +212,35 @@ func (server *WebServer) ListenAndServe() {
 	log.Println("Listening to websockets on", server.port)
 	var err error
 	if server.setting.useSsl {
-		err = http.ListenAndServeTLS(
-			fmt.Sprintf(":%d", server.port),
+		var config *tls.Config = nil
+		if server.setting.authenticateBrowser {
+			certPool := x509.NewCertPool()
+			func() {
+				fi, err := os.Open(server.setting.browserRootCert)
+				if err != nil {
+					panic(err)
+				}
+				defer fi.Close()
+				buf := new(bytes.Buffer)
+				reader := bufio.NewReader(fi)
+				io.Copy(buf, reader)
+				if ok := certPool.AppendCertsFromPEM(buf.Bytes()); !ok {
+					panic("Failed to append PEM.")
+				}
+				config = &tls.Config{
+					ClientAuth: tls.RequireAndVerifyClientCert,
+					ClientCAs:  certPool,
+				}
+			}()
+		}
+		http_server := &http.Server{
+			Addr:      fmt.Sprintf(":%d", server.port),
+			Handler:   server.mux,
+			TLSConfig: config,
+		}
+		err = http_server.ListenAndServeTLS(
 			server.setting.serverCertificate,
-			server.setting.serverPrivateKey,
-			server.mux)
+			server.setting.serverPrivateKey)
 	} else {
 		err = http.ListenAndServe(fmt.Sprintf(":%d", server.port), server.mux)
 	}

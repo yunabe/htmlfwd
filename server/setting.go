@@ -17,7 +17,8 @@ type Setting struct {
 	useSsl               bool
 	serverCertificate    string
 	serverPrivateKey     string
-	authenticateBrowser bool
+	authenticateBrowser  bool
+	browserRootCert      string
 }
 
 func (setting *Setting) verify() bool {
@@ -25,6 +26,11 @@ func (setting *Setting) verify() bool {
 	if setting.authenticateBrowser {
 		if !setting.useSsl {
 			log.Println("use_ssl should be true to enable browser authentication.")
+			ok = false
+		}
+		if len(setting.browserRootCert) == 0 {
+			log.Println(
+				"browser_root_cert should be set to enable browser authentication.")
 			ok = false
 		}
 	}
@@ -38,7 +44,7 @@ func (setting *Setting) verify() bool {
 			ok = false
 		}
 	}
-	return ok;
+	return ok
 }
 
 func readSetting() *Setting {
@@ -78,13 +84,17 @@ func readSetting() *Setting {
 			setting.keepAliveIntervalSec = int32(value)
 		} else if key == "use_ssl" {
 			setting.useSsl = true
+		} else if key == "authenticate_browser" {
+			setting.authenticateBrowser = true
 		} else if key == "server_certificate" {
 			setting.serverCertificate = value_str
 		} else if key == "server_private_key" {
 			setting.serverPrivateKey = value_str
+		} else if key == "browser_root_cert" {
+			setting.browserRootCert = value_str
 		} else {
 			log.Println("Unknown setting key:", key)
-		} 
+		}
 	}
 	if setting.verify() {
 		return &setting
