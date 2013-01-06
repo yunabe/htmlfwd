@@ -167,11 +167,10 @@ Server.prototype.onMessage = function(e) {
     if (obj['KeepAliveInterval']) {
         addMessage('Set KeepAliveInterval:', obj['KeepAliveInterval']);
         this.keepAliveInterval = obj['KeepAliveInterval'];
-        this.resetKeepAliveTimeout();
     }
+    this.resetKeepAliveTimeout();
     if (obj['KeepAlive'] == true) {
         addMessage('Recieved keep-alive traffic.');
-        this.resetKeepAliveTimeout();
         return;
     }
     var id = obj['Id']
